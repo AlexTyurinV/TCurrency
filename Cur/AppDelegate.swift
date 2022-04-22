@@ -25,6 +25,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    func applicationWillResignActive(_ notification: Notification) {
+        print("applicationWillResignActive")
+    }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return true
+    }
 }
-

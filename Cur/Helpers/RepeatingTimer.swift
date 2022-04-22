@@ -8,37 +8,59 @@
 import Foundation
 
 final class RepeatingTimer {
-    let timeInterval: TimeInterval
-    init(timeInterval: TimeInterval) {
-        self.timeInterval = timeInterval
+    private let steps: Int
+    private var activeStep: Int = 0
+    private enum State {
+        case suspended
+        case resumed
+    }
+    private var state: State = .suspended
+
+    var eventHandler: ((_ step: Int) -> Void)?
+
+    private lazy var timer: DispatchSourceTimer = {
+        let timer = DispatchSource.makeTimerSource()
+        activeStep = steps
+        timer.schedule(deadline: .now() + 1, repeating: 1)
+        timer.setEventHandler(handler: { [weak self] in
+            guard let self = self else {
+                return
+            }
+            DispatchQueue.main.async {
+                self.activeStep -= 1
+                if self.activeStep < 0 {
+                    self.activeStep = self.steps
+                }
+                self.eventHandler?(self.activeStep)
+            }
+
+        })
+        return timer
+    }()
+
+    init(steps: Int) {
+        self.steps = steps
     }
 
     deinit {
         timer.setEventHandler {}
         timer.cancel()
-        resume()
+        start()
         eventHandler = nil
     }
 
-    private lazy var timer: DispatchSourceTimer = {
-        let t = DispatchSource.makeTimerSource()
-        t.schedule(deadline: .now() + self.timeInterval, repeating: self.timeInterval)
-        t.setEventHandler(handler: { [weak self] in
-            DispatchQueue.main.async {
-                self?.eventHandler?()
-            }
-
-        })
-        return t
-    }()
-
-    var eventHandler: (() -> Void)?
-    enum State {
-        case suspended
-        case resumed
+    var isActive: Bool {
+        state == .resumed
     }
-    private(set) var state: State = .suspended
-    func resume() {
+
+    func restartIfActive() {
+        if isActive {
+            stop()
+            start()
+        }
+    }
+
+    func start() {
         if state == .resumed {
             return
         }
@@ -46,7 +68,7 @@ final class RepeatingTimer {
         timer.resume()
     }
 
-    func suspend() {
+    func stop() {
         if state == .suspended {
             return
         }

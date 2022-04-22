@@ -13,6 +13,8 @@ class BestWayCalculator {
     private var bestWayFullCombinationsUSD_USD: [[CurrencyType]] = []
     private var bestWayFullCombinationsEUR_EUR: [[CurrencyType]] = []
 
+    private var cachedCalculations = Set<Transaction>()
+
     let rateManager = RateManager()
     private let currencyes: [CurrencyType]
 
@@ -32,7 +34,12 @@ class BestWayCalculator {
 
     func optimize(startAmount: Float, from: CurrencyType, to: CurrencyType) -> [Transaction] {
         let steps = steps(from: from, to: to)
-        return steps.map { makeTransaction(startAmount: startAmount, road: $0) }.sorted { $0.toCount > $1.toCount }
+        let transactions = steps.map { makeTransaction(startAmount: startAmount, road: $0) }.sorted { $0.toCount > $1.toCount }
+
+        transactions.forEach {
+            cachedCalculations.insert($0)
+        }
+        return transactions
     }
 
     private func makeTransaction(startAmount: Float, road: [CurrencyType]) -> Transaction {
@@ -60,12 +67,35 @@ class BestWayCalculator {
             ))
         }
 
+        let fromCurrency = steps.first!.fromCurrency
+        let toCurrency = steps.last!.toCurrency
+        let toCount = steps.last?.toCount ?? 0
+
+        var transaction = Transaction(
+            fromCount: startAmount,
+            fromCurrency: fromCurrency,
+            toCount: toCount,
+            toCurrency: toCurrency,
+            steps: steps,
+            isIncreased: nil
+        )
+
+        var isIncreased: Bool? = nil
+        if let cached = cachedCalculations.first(where: { $0 == transaction }) {
+            if cached.toCount > toCount {
+                isIncreased = false
+            } else if cached.toCount < toCount {
+                isIncreased = true
+            }
+        }
+
         return Transaction(
             fromCount: startAmount,
-            fromCurrency: steps.first!.fromCurrency,
-            toCount: steps.last?.toCount ?? 0,
-            toCurrency: steps.last!.toCurrency,
-            steps: steps
+            fromCurrency: fromCurrency,
+            toCount: toCount,
+            toCurrency: toCurrency,
+            steps: steps,
+            isIncreased: isIncreased
         )
     }
 }

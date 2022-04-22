@@ -39,6 +39,8 @@ extension CurrencyAPI {
 
     static func newAPI(sessionID: String, userID: String) -> Self {
 
+        let session = URLSession(configuration: URLSessionConfiguration.default, delegate: nil, delegateQueue: OperationQueue.main)
+
         func fetch(
             amount: Float,
             currencyFrom: CurrencyType,
@@ -56,7 +58,11 @@ extension CurrencyAPI {
                 return
             }
 
-            URLSession.shared.dataTask(with: request) { data, _, error in
+            print(">> \(currencyFrom.rawValue) -> \(currencyTo.rawValue) START")
+
+            session.dataTask(with: request) { data, _, error in
+
+                print(">> \(currencyFrom.rawValue) -> \(currencyTo.rawValue) Done")
                 if let error = error {
                     completion(.failure(error))
                     return
@@ -75,6 +81,7 @@ extension CurrencyAPI {
                         let toC = CurrencyType(rawValue: payload.dstAmount.currency.name)
                     else {
                         completion(.failure(CurrencyFetcherError.notAuth))
+                        print("request \(String(data: request.httpBody!, encoding: .utf8))")
                         return
                     }
                     let result = ChangeResult(
@@ -98,21 +105,23 @@ extension CurrencyAPI {
 
             for fromC in currencyes {
                 for toC in currencyes where toC != fromC {
-                    dispatchGroup.enter()
-                    fetch(amount: fromC.priceFor1000USD, currencyFrom: fromC, currencyTo: toC) { result in
-                        switch result {
-                            case .success(let data):
-                                transactions.append(ChangeResult(
-                                    fromCount: 1000,
-                                    fromCurrency: data.fromCurrency,
-                                    toCount: (data.toCount * 1000) / data.fromCount,
-                                    toCurrency: data.toCurrency
-                                ))
-                            case .failure(let error):
-                                requestError = error
+                        dispatchGroup.enter()
+                        usleep([10000, 50000].randomElement() ?? 0)
+                        fetch(amount: fromC.priceFor1000USD, currencyFrom: fromC, currencyTo: toC) { result in
+                            switch result {
+                                case .success(let data):
+                                    transactions.append(ChangeResult(
+                                        fromCount: 1000,
+                                        fromCurrency: data.fromCurrency,
+                                        toCount: (data.toCount * 1000) / data.fromCount,
+                                        toCurrency: data.toCurrency
+                                    ))
+                                case .failure(let error):
+                                    requestError = error
+                            }
+                            dispatchGroup.leave()
                         }
-                        dispatchGroup.leave()
-                    }
+
                 }
             }
 

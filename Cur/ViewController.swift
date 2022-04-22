@@ -7,7 +7,7 @@
 
 import Cocoa
 
-let currencyes: [CurrencyType] = [.RUB, .USD, .EUR, .JPY, .CNY, .INR, .HKD, .GEL, .IDR, .CZK, .AUD, .TRY]
+let currencyes: [CurrencyType] = [.RUB, .USD, .EUR, .JPY, .CNY, .INR, .IDR] //.HKD , .AUD, .TRY , .CZK , .GEL
 
 class ViewController: NSViewController {
 
@@ -17,28 +17,24 @@ class ViewController: NSViewController {
     @IBOutlet weak var timerButton: NSButton!
 
     let calculator = BestWayCalculator(currencyes: currencyes)
-    let timer = RepeatingTimer(timeInterval: 1)
-    var timerStep: Int = 10
+    let timer = RepeatingTimer(steps: 100)
+    var authStep: Int = 3
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         startCalculator()
 
-        timer.eventHandler = { [weak self] in
-            self?.timerUpdate()
-        }
+        timerSetup()
     }
 
     @IBAction func actionTimer(_ sender: Any) {
-        guard timer.state == .suspended else {
-            timer.suspend()
+        if timer.isActive {
             timerButton.title = "Timer"
-            return
+            timer.stop()
+        } else {
+            timer.start()
         }
-        timerStep = 10
-        timerButton.title = "Timer (\(timerStep))"
-        timer.resume()
     }
 
     @IBAction func bestWay(_ sender: Any) {
@@ -61,16 +57,23 @@ class ViewController: NSViewController {
 
     @IBAction func actionUsdToUsd(_ sender: Any) {
         show(transactions: { [weak self] in
-            Array(self?.calculator.optimize(startAmount: 1000, from: .USD, to: .USD).prefix(15) ?? [])
+            Array(self?.calculator.optimize(startAmount: 1582, from: .USD, to: .RUB).prefix(10) ?? [])
         })
     }
 
     @IBAction func actionEurToEur(_ sender: Any) {
         show(transactions: { [weak self] in
-            Array(self?.calculator.optimize(startAmount: 1000, from: .EUR, to: .EUR).prefix(15) ?? [])
+            Array(self?.calculator.optimize(startAmount: 227, from: .EUR, to: .RUB).prefix(10) ?? [])
         })
     }
-    
+
+    @IBAction func actionJpyToAny(_ sender: Any) {
+        textView.textColor = .white
+        show(transactions: { [weak self] in
+            Array(self?.calculator.optimize(startAmount: 1582, from: .USD, to: .RUB).prefix(15) ?? [])
+        })
+    }
+
     @IBAction func requestTap(_ sender: Any) {
         refreshCalculator()
     }
@@ -94,16 +97,21 @@ extension ViewController {
     }
 }
 
+// MARK: - Timer
+
 extension ViewController {
 
-    private func timerUpdate() {
-        timerStep -= 1
-        guard timerStep < 0 else {
-            timerButton.title = "Timer (\(timerStep))"
+    private func timerSetup() {
+        timer.eventHandler = { [weak self] step in
+            self?.timerUpdate(step: step)
+        }
+    }
+
+    private func timerUpdate(step: Int) {
+        timerButton.title = "Timer (\(step))"
+        guard step < 1 else {
             return
         }
-        timerStep = 10
-        timerButton.title = "Timer (\(timerStep))"
 
         activityIndicator.startAnimation(nil)
         activityIndicator.isHidden = false
@@ -122,11 +130,24 @@ extension ViewController {
                 } else {
                     print("Request failed with error: \(error)")
                 }
+                self?.timer.stop()
+                self?.timerButton.title = "Timer"
             } else {
                 self?.bestWay(1)
+
+                self?.authStep -= 1
+                if self?.authStep ?? 1 < 0 {
+                    self?.authStep = 3
+                    DispatchQueue.main.asyncAfter(deadline: .now()+10) {
+                        self?.login()
+                    }
+                }
             }
         })
     }
+}
+
+extension ViewController {
 
     private func refreshCalculator() {
         activityIndicator.startAnimation(nil)
@@ -172,6 +193,7 @@ extension ViewController {
     }
 
     private func show(transactions: @escaping () -> [Transaction] ) {
+        timer.restartIfActive()
         textView.string = " "
         DispatchQueue.main.async {
             let transactions = transactions()
